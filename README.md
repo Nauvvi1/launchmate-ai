@@ -1,14 +1,16 @@
 # LaunchMate AI
 
-**LaunchMate AI** is an AI-style MVP readiness auditor for hackathon teams, indie developers and small SaaS projects.
+**LaunchMate AI** is an MVP readiness auditor for hackathon teams, indie developers and small SaaS projects.
 
-It checks whether a project is ready to be shown to judges, users or a marketplace reviewer. The app audits a public demo URL, scans basic landing-page signals, optionally reads a public GitHub README, calculates a **Marketplace Readiness Score**, maps the project to a maturity level and generates a prioritized action plan.
+It checks whether a project is ready to be shown to judges, users or a marketplace reviewer. The app audits a public demo URL, scans landing-page signals, optionally reads a public GitHub README, calculates a **Marketplace Readiness Score**, maps the project to a maturity level and generates a prioritized action plan.
+
+Version 1.1 adds an optional **OpenAI Advisor** layer. The deterministic audit still works as the source of truth. If `OPENAI_API_KEY` is configured, OpenAI reviews the collected audit facts and returns a compact coefficient, verdict, upgrade plan, marketplace pitch and judge-prep questions.
 
 ## Why this project exists
 
 Hackathon teams often build a working MVP but fail to package it properly: broken demo link, weak README, no clear CTA, no monetization story, missing mobile metadata, no public report and no structured launch checklist.
 
-LaunchMate AI solves this by giving a fast pre-submission audit:
+LaunchMate AI gives a fast pre-submission audit:
 
 - Does the demo open?
 - Is the landing page understandable?
@@ -19,6 +21,7 @@ LaunchMate AI solves this by giving a fast pre-submission audit:
 - Is the target audience clear?
 - Is monetization explained?
 - What should be fixed first?
+- What would an AI reviewer change in the final score?
 
 ## Features
 
@@ -33,11 +36,14 @@ LaunchMate AI solves this by giving a fast pre-submission audit:
   - Documentation — 20 points
   - Business clarity — 15 points
   - Launch assets — 10 points
-- Maturity level:
-  - Starter
-  - Advanced
-  - Pro / Marketplace Ready
-- Prioritized recommendations by impact.
+- Optional OpenAI Advisor:
+  - AI coefficient for the final score
+  - short verdict
+  - strongest signals
+  - main risks
+  - compact upgrade plan
+  - marketplace pitch
+  - judge questions and short answers
 - Public report page.
 - Markdown report export.
 - Local JSON storage for recent audits.
@@ -47,6 +53,7 @@ LaunchMate AI solves this by giving a fast pre-submission audit:
 - Node.js 18+
 - Express
 - Vanilla JavaScript frontend
+- OpenAI Responses API via native `fetch` when configured
 - Local JSON file storage
 - No database required for MVP
 
@@ -75,27 +82,36 @@ Run tests:
 npm test
 ```
 
+## Enable OpenAI Advisor
+
+Create `.env` in the project root:
+
+```env
+PORT=3000
+PUBLIC_BASE_URL=http://localhost:3000
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini
+AI_ADVISOR_ENABLED=true
+AI_ADVISOR_AUTO=true
+```
+
+If the key is missing or OpenAI does not respond, the app falls back to the mechanical score and still generates the report.
+
 ## Demo scenario
 
 1. Open `http://localhost:3000`.
 2. Press **Fill sample data**.
 3. Press **Run readiness audit**.
-4. Open the generated report.
-5. Export the report as Markdown.
+4. Show the score and maturity level.
+5. Open **AI advisor** to show coefficient, verdict, upgrade plan, pitch and judge prep.
+6. Open **Checks** to show real deterministic scoring.
+7. Open the public report link.
+8. Export the report as Markdown.
 
 The app also includes a sample landing page at:
 
 ```text
 http://localhost:3000/sample-project.html
-```
-
-## Environment variables
-
-Create `.env` manually if needed. The MVP works without it.
-
-```env
-PORT=3000
-PUBLIC_BASE_URL=http://localhost:3000
 ```
 
 ## API
@@ -128,6 +144,12 @@ Content-Type: application/json
 GET /api/audits/:id
 ```
 
+### Re-run AI Advisor
+
+```http
+POST /api/audits/:id/ai
+```
+
 ### Export Markdown
 
 ```http
@@ -136,24 +158,23 @@ GET /api/audits/:id/markdown
 
 ## Scoring model
 
-LaunchMate AI uses deterministic checks and a rule-based recommendation engine. This is intentional for the MVP: the product is useful even without external AI keys or paid APIs.
+LaunchMate AI uses deterministic checks first. This keeps the product explainable and useful without external AI keys.
 
-Future versions can add LLM-based analysis for:
+When OpenAI Advisor is enabled, the flow is:
 
-- README rewriting.
-- Landing-page copy improvement.
-- Pitch generation.
-- Demo video script generation.
-- GitHub issue generation.
-- CI integration.
+```text
+real checks → base score → OpenAI reviews facts → coefficient → final score
+```
+
+The AI coefficient is conservative. If OpenAI fails, coefficient is treated as `1.00` and the report uses the deterministic score.
 
 ## Roadmap
 
 - Add Playwright screenshot audit for desktop and mobile.
 - Add console error collection.
 - Add PDF export.
+- Add deeper GitHub scan: package scripts, tests, env example, Dockerfile.
 - Add GitHub OAuth and private repository scans.
-- Add OpenAI-compatible LLM analysis as an optional plugin.
 - Add team workspaces.
 - Add CI check mode for pull requests.
 - Add marketplace-specific templates.
@@ -172,11 +193,12 @@ LaunchMate AI can be monetized through:
 
 ## Hackathon progress story
 
-The project is designed as a developer productivity tool for hackathon teams and indie makers. During the hackathon, the measurable progress can be shown through:
+The project is designed as a developer productivity tool for hackathon teams and indie makers. During the hackathon, measurable progress can be shown through:
 
 - Working MVP with public UI.
 - Backend audit engine.
 - Scoring model.
+- OpenAI Advisor layer.
 - Report generation.
 - Markdown export.
 - README and submission materials.

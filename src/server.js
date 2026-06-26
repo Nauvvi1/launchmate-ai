@@ -4,8 +4,12 @@ import morgan from 'morgan';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nanoid } from 'nanoid';
+import { loadLocalEnv } from './env.js';
+import { runAiAdvisor } from './aiAdvisor.js';
 import { runAudit, reportToMarkdown } from './auditEngine.js';
 import { getAudit, listAudits, saveAudit } from './storage.js';
+
+loadLocalEnv();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +17,7 @@ const PUBLIC_DIR = path.resolve(__dirname, '..', 'public');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const autoRunAiAdvisor = process.env.AI_ADVISOR_AUTO !== 'false';
 
 app.use(helmet({
   contentSecurityPolicy: false
@@ -39,7 +44,7 @@ function validateAuditPayload(body) {
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'LaunchMate AI', version: '1.0.0' });
+  res.json({ ok: true, service: 'LaunchMate AI', version: '1.1.0' });
 });
 
 app.get('/api/audits', async (_req, res, next) => {
@@ -50,9 +55,10 @@ app.get('/api/audits', async (_req, res, next) => {
         id: audit.id,
         name: audit.input.name,
         generatedAt: audit.generatedAt,
-        score: audit.score.total,
-        level: audit.level.name,
-        demoUrl: audit.input.demoUrl
+        score: audit.ai?.status === 'completed' ? audit.ai.adjustedScore : audit.score.total,
+        level: audit.ai?.status === 'completed' ? audit.ai.adjustedLevel : audit.level.name,
+        demoUrl: audit.input.demoUrl,
+        aiStatus: audit.ai?.status || 'not_run'
       }))
     });
   } catch (error) {
@@ -70,6 +76,11 @@ app.post('/api/audits', async (req, res, next) => {
       publicUrl: `${publicBaseUrl(req)}/report/${id}`,
       ...report
     };
+
+    if (autoRunAiAdvisor) {
+      audit.ai = await runAiAdvisor(audit);
+    }
+
     await saveAudit(audit);
     res.status(201).json(audit);
   } catch (error) {
@@ -81,6 +92,18 @@ app.get('/api/audits/:id', async (req, res, next) => {
   try {
     const audit = await getAudit(req.params.id);
     if (!audit) return res.status(404).json({ error: 'Audit not found' });
+    res.json(audit);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/audits/:id/ai', async (req, res, next) => {
+  try {
+    const audit = await getAudit(req.params.id);
+    if (!audit) return res.status(404).json({ error: 'Audit not found' });
+    audit.ai = await runAiAdvisor(audit);
+    await saveAudit(audit);
     res.json(audit);
   } catch (error) {
     next(error);

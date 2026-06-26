@@ -457,13 +457,30 @@ export function reportToMarkdown(report) {
     ? report.recommendations.map((item, index) => `${index + 1}. **${item.title}** — ${item.action}`).join('\n')
     : 'No critical recommendations. Keep polishing and prepare the submission video.';
 
+  const ai = report.ai?.status === 'completed'
+    ? `## AI Advisor\n\n` +
+      `- Coefficient: x${report.ai.coefficient}\n` +
+      `- Base score: ${report.ai.baseScore}/100\n` +
+      `- AI-adjusted score: ${report.ai.adjustedScore}/100 — ${report.ai.adjustedLevel}\n` +
+      `- Confidence: ${report.ai.confidence}\n\n` +
+      `${report.ai.verdict}\n\n` +
+      `### AI priority actions\n` +
+      `${report.ai.priorityActions.map((item, index) => `${index + 1}. **${item.title}** (${item.impact} impact, ${item.effort} effort) — ${item.action}`).join('\n')}\n\n` +
+      `### Marketplace pitch\n${report.ai.marketplacePitch}\n\n`
+    : `## AI Advisor\n\n${report.ai?.message || 'AI Advisor was not run. Mechanical score is used.'}\n\n`;
+
+  const finalScore = report.ai?.status === 'completed' ? report.ai.adjustedScore : report.score.total;
+  const finalLevel = report.ai?.status === 'completed' ? report.ai.adjustedLevel : report.level.name;
+  const summary = report.ai?.status === 'completed' ? report.ai.verdict : report.executiveSummary;
+
   return `# LaunchMate AI Report: ${report.input.name}\n\n` +
     `Generated: ${report.generatedAt}\n\n` +
     `Demo URL: ${report.input.demoUrl}\n\n` +
     `Repository: ${report.input.repoUrl || 'not provided'}\n\n` +
     `## Marketplace Readiness Score\n\n` +
-    `**${report.score.total}/100 — ${report.level.name}**\n\n` +
-    `${report.executiveSummary}\n\n` +
+    `**${finalScore}/100 — ${finalLevel}**\n\n` +
+    `${summary}\n\n` +
+    `${ai}` +
     `## Score breakdown\n\n${groups}\n\n` +
     `## Recommended next steps\n\n${recommendations}\n\n` +
     `## Page snapshot\n\n` +

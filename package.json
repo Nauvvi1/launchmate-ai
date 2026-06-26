@@ -1,7 +1,7 @@
 {
   "name": "launchmate-ai",
-  "version": "1.0.0",
-  "description": "AI-style MVP readiness auditor for hackathon and marketplace launches.",
+  "version": "1.1.0",
+  "description": "MVP readiness auditor with deterministic checks and optional OpenAI Advisor.",
   "main": "src/server.js",
   "type": "module",
   "scripts": {

@@ -26,25 +26,25 @@ if (fillSample && form) {
 }
 
 if (form) {
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const data = Object.fromEntries(new FormData(form).entries());
-  renderLoading();
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    renderLoading();
 
-  try {
-    const response = await fetch('/api/audits', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(data)
-    });
+    try {
+      const response = await fetch('/api/audits', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(data)
+      });
 
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || 'Audit failed');
-    renderReport(payload, resultPanel);
-  } catch (error) {
-    resultPanel.innerHTML = `<div class="error-box"><strong>Audit failed:</strong><br>${escapeHtml(error.message)}</div>`;
-  }
-});
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Audit failed');
+      renderReport(payload, resultPanel);
+    } catch (error) {
+      resultPanel.innerHTML = `<div class="error-box"><strong>Audit failed:</strong><br>${escapeHtml(error.message)}</div>`;
+    }
+  });
 }
 
 function renderLoading() {
@@ -53,7 +53,7 @@ function renderLoading() {
       <div class="spinner"></div>
       <div>
         <h2>Auditing the project...</h2>
-        <p>Checking demo URL, landing page, README signals, business clarity and launch readiness.</p>
+        <p>Checking demo URL, landing page, README signals, business clarity and AI readiness.</p>
       </div>
     </div>
   `;
@@ -71,6 +71,18 @@ function badgeClass(score) {
   return 'bad';
 }
 
+function displayScore(report) {
+  return report.ai?.status === 'completed' ? report.ai.adjustedScore : report.score.total;
+}
+
+function displayLevel(report) {
+  return report.ai?.status === 'completed' ? report.ai.adjustedLevel : report.level.name;
+}
+
+function displaySummary(report) {
+  return report.ai?.status === 'completed' && report.ai.verdict ? report.ai.verdict : report.executiveSummary;
+}
+
 async function fetchMarkdown(id) {
   const response = await fetch(`/api/audits/${id}/markdown`);
   return response.text();
@@ -78,17 +90,20 @@ async function fetchMarkdown(id) {
 
 export async function renderReport(report, mount) {
   const markdown = await fetchMarkdown(report.id);
-  const scorePercent = `${report.score.total}%`;
+  const shownScore = displayScore(report);
+  const scorePercent = `${shownScore}%`;
   mount.innerHTML = `
     <div class="report-header">
-      <div class="report-score" style="--score-percent:${scorePercent};--score-color:${scoreColor(report.score.total)}">${report.score.total}</div>
+      <div class="report-score" style="--score-percent:${scorePercent};--score-color:${scoreColor(shownScore)}">${shownScore}</div>
       <div>
-        <span class="badge ${badgeClass(report.score.total)}">${escapeHtml(report.level.name)}</span>
+        <span class="badge ${badgeClass(shownScore)}">${escapeHtml(displayLevel(report))}</span>
         <h2>${escapeHtml(report.input.name)}</h2>
-        <p class="muted">${escapeHtml(report.executiveSummary)}</p>
+        <p class="muted">${escapeHtml(displaySummary(report))}</p>
+        ${renderAiMini(report)}
         <div class="report-actions">
           <a class="button secondary" href="${report.publicUrl}" target="_blank" rel="noreferrer">Public report</a>
           <a class="button ghost" href="/api/audits/${report.id}/markdown">Export Markdown</a>
+          ${report.ai?.status !== 'completed' ? '<button class="button ghost" type="button" id="runAi">Run AI analysis</button>' : ''}
         </div>
       </div>
     </div>
@@ -97,10 +112,12 @@ export async function renderReport(report, mount) {
       <button class="tab active" type="button" data-tab="overview">Overview</button>
       <button class="tab" type="button" data-tab="checks">Checks</button>
       <button class="tab" type="button" data-tab="next">Next steps</button>
+      <button class="tab" type="button" data-tab="ai">AI advisor</button>
       <button class="tab" type="button" data-tab="markdown">Markdown</button>
     </div>
 
     <section class="tab-panel active" data-panel="overview">
+      ${renderScoreExplanation(report)}
       ${renderGroups(report.score.groups, false)}
       <div class="group-card" style="margin-top:16px">
         <div class="group-top"><strong>Page snapshot</strong><span>${escapeHtml(String(report.page.status))} · ${escapeHtml(String(report.page.responseTimeMs))} ms</span></div>
@@ -122,6 +139,10 @@ export async function renderReport(report, mount) {
       </div>
     </section>
 
+    <section class="tab-panel" data-panel="ai">
+      ${renderAiPanel(report)}
+    </section>
+
     <section class="tab-panel" data-panel="markdown">
       <pre class="markdown-preview">${escapeHtml(markdown)}</pre>
     </section>
@@ -134,6 +155,153 @@ export async function renderReport(report, mount) {
       mount.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === name));
     });
   });
+
+  const runAiButton = mount.querySelector('#runAi');
+  if (runAiButton) {
+    runAiButton.addEventListener('click', () => rerunAiAnalysis(report.id, mount));
+  }
+}
+
+async function rerunAiAnalysis(id, mount) {
+  const button = mount.querySelector('#runAi');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Running AI...';
+  }
+
+  try {
+    const response = await fetch(`/api/audits/${id}/ai`, { method: 'POST' });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'AI analysis failed');
+    await renderReport(payload, mount);
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Run AI analysis';
+    }
+    alert(`AI analysis failed: ${error.message}`);
+  }
+}
+
+function renderAiMini(report) {
+  if (report.ai?.status === 'completed') {
+    return `
+      <div class="ai-mini ok">
+        <strong>AI coefficient ×${escapeHtml(String(report.ai.coefficient))}</strong>
+        <span>Base ${report.ai.baseScore}/100 → final ${report.ai.adjustedScore}/100 · ${escapeHtml(report.ai.confidence)} confidence</span>
+      </div>
+    `;
+  }
+
+  if (report.ai?.status === 'failed') {
+    return `
+      <div class="ai-mini warn">
+        <strong>AI fallback</strong>
+        <span>${escapeHtml(report.ai.message || 'Mechanical score is used.')}</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="ai-mini">
+      <strong>AI disabled</strong>
+      <span>${escapeHtml(report.ai?.message || 'Add OPENAI_API_KEY to enable AI coefficient and compact advice.')}</span>
+    </div>
+  `;
+}
+
+function renderScoreExplanation(report) {
+  if (report.ai?.status !== 'completed') {
+    return `
+      <div class="ai-score-line">
+        <strong>Final score:</strong> ${report.score.total}/100 · mechanical audit only
+      </div>
+    `;
+  }
+
+  return `
+    <div class="ai-score-line">
+      <strong>Final score:</strong> ${report.ai.adjustedScore}/100 · base ${report.ai.baseScore}/100 × AI coefficient ${report.ai.coefficient}
+    </div>
+  `;
+}
+
+function renderAiPanel(report) {
+  const ai = report.ai;
+  if (!ai || ai.status === 'disabled') {
+    return `
+      <div class="ai-card">
+        <h3>AI Advisor is disabled</h3>
+        <p class="muted">${escapeHtml(ai?.message || 'Create .env and add OPENAI_API_KEY to enable the OpenAI-powered coefficient, verdict, pitch and judge prep.')}</p>
+        <pre class="markdown-preview">OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini</pre>
+      </div>
+    `;
+  }
+
+  if (ai.status === 'failed') {
+    return `
+      <div class="ai-card">
+        <h3>AI fallback is active</h3>
+        <p class="muted">${escapeHtml(ai.message)}</p>
+        <p class="muted">${escapeHtml(ai.error || '')}</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="ai-grid">
+      <article class="ai-card hero-ai">
+        <span class="impact">AI coefficient ×${escapeHtml(String(ai.coefficient))}</span>
+        <h3>${ai.adjustedScore}/100 · ${escapeHtml(ai.adjustedLevel)}</h3>
+        <p>${escapeHtml(ai.verdict)}</p>
+      </article>
+      <article class="ai-card">
+        <h3>Strongest signals</h3>
+        ${renderShortList(ai.strongestSignals)}
+      </article>
+      <article class="ai-card">
+        <h3>Main risks</h3>
+        ${renderShortList(ai.riskSignals)}
+      </article>
+      <article class="ai-card full">
+        <h3>Upgrade plan</h3>
+        <div class="ai-actions">${(ai.priorityActions || []).map(renderAiAction).join('')}</div>
+      </article>
+      <article class="ai-card full">
+        <h3>Marketplace pitch</h3>
+        <p>${escapeHtml(ai.marketplacePitch)}</p>
+      </article>
+      <article class="ai-card full">
+        <h3>Judge prep</h3>
+        <div class="qa-list">${(ai.judgeQuestions || []).map(renderJudgeQuestion).join('')}</div>
+      </article>
+    </div>
+  `;
+}
+
+function renderShortList(items = []) {
+  if (!items.length) return '<p class="muted">No clear signals found.</p>';
+  return `<ul class="compact-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+}
+
+function renderAiAction(item) {
+  return `
+    <div class="ai-action">
+      <span class="impact">${escapeHtml(item.impact)} impact · ${escapeHtml(item.effort)} effort</span>
+      <strong>${escapeHtml(item.title)}</strong>
+      <p>${escapeHtml(item.action)}</p>
+    </div>
+  `;
+}
+
+function renderJudgeQuestion(item) {
+  return `
+    <div class="qa-item">
+      <strong>Q: ${escapeHtml(item.question)}</strong>
+      <p>A: ${escapeHtml(item.answer)}</p>
+    </div>
+  `;
 }
 
 function renderGroups(groups, showChecks) {
