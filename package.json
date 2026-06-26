@@ -1,0 +1,33 @@
+{
+  "name": "launchmate-ai",
+  "version": "1.0.0",
+  "description": "AI-style MVP readiness auditor for hackathon and marketplace launches.",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "zip": "node scripts/make-zip.js"
+  },
+  "keywords": [
+    "hackathon",
+    "mvp",
+    "marketplace",
+    "launch",
+    "audit",
+    "developer-tools"
+  ],
+  "author": "LaunchMate AI",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "nanoid": "^5.0.7"
+  },
+  "devDependencies": {}
+}
