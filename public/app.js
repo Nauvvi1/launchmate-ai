@@ -1,3 +1,28 @@
+const LOCAL_AUDITS_KEY = 'launchmate-ai-audits-v1';
+
+function readLocalAudits() {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_AUDITS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalAudit(report) {
+  try {
+    const audits = readLocalAudits();
+    audits[report.id] = report;
+    const entries = Object.entries(audits).slice(-25);
+    localStorage.setItem(LOCAL_AUDITS_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    // Browser storage can be disabled; server-side storage is still used.
+  }
+}
+
+export function loadLocalAudit(id) {
+  return readLocalAudits()[id] || null;
+}
+
 const form = document.querySelector('#auditForm');
 const fillSample = document.querySelector('#fillSample');
 const resultPanel = document.querySelector('#resultPanel');
@@ -40,6 +65,7 @@ if (form) {
 
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Audit failed');
+      saveLocalAudit(payload);
       renderReport(payload, resultPanel);
     } catch (error) {
       resultPanel.innerHTML = `<div class="error-box"><strong>Audit failed:</strong><br>${escapeHtml(error.message)}</div>`;
@@ -85,11 +111,67 @@ function displaySummary(report) {
 
 async function fetchMarkdown(id) {
   const response = await fetch(`/api/audits/${id}/markdown`);
+  if (!response.ok) throw new Error('Markdown endpoint is not available');
   return response.text();
 }
 
+function clientMarkdown(report) {
+  const ai = report.ai?.status === 'completed' ? report.ai : null;
+  const score = ai ? ai.adjustedScore : report.score.total;
+  const level = ai ? ai.adjustedLevel : report.level.name;
+  const lines = [
+    `# ${report.input.name} — LaunchMate AI Report`,
+    '',
+    `Final score: ${score}/100`,
+    `Level: ${level}`,
+    `Demo URL: ${report.input.demoUrl}`,
+    '',
+    '## Summary',
+    ai?.verdict || report.executiveSummary,
+    '',
+    '## Score groups',
+    ...report.score.groups.map((group) => `- ${group.label}: ${group.score}/${group.max}`),
+    '',
+    '## Key checks',
+    ...report.score.groups.flatMap((group) => group.items.map((item) => `- ${item.ok ? 'PASS' : 'FAIL'} — ${item.label}`)),
+    '',
+    '## Next steps',
+    ...(report.recommendations.length ? report.recommendations.map((item) => `- ${item.title}: ${item.action}`) : ['- No critical gaps found.']),
+    ''
+  ];
+
+  if (ai) {
+    lines.push('## AI Advisor', `Coefficient: ${ai.coefficient}`, '', '### Upgrade plan');
+    lines.push(...ai.priorityActions.map((item) => `- ${item.title}: ${item.action}`));
+    lines.push('', '### Marketplace pitch', ai.marketplacePitch, '');
+  }
+
+  return lines.join('\n');
+}
+
+async function getReportMarkdown(report) {
+  try {
+    return await fetchMarkdown(report.id);
+  } catch {
+    return clientMarkdown(report);
+  }
+}
+
+function downloadTextFile(filename, content) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function renderReport(report, mount) {
-  const markdown = await fetchMarkdown(report.id);
+  saveLocalAudit(report);
+  const markdown = await getReportMarkdown(report);
   const shownScore = displayScore(report);
   const scorePercent = `${shownScore}%`;
   mount.innerHTML = `
@@ -102,7 +184,7 @@ export async function renderReport(report, mount) {
         ${renderAiMini(report)}
         <div class="report-actions">
           <a class="button secondary" href="${report.publicUrl}" target="_blank" rel="noreferrer">Public report</a>
-          <a class="button ghost" href="/api/audits/${report.id}/markdown">Export Markdown</a>
+          <button class="button ghost" type="button" id="downloadMarkdown">Export Markdown</button>
           ${report.ai?.status !== 'completed' ? '<button class="button ghost" type="button" id="runAi">Run AI analysis</button>' : ''}
         </div>
       </div>
@@ -156,6 +238,11 @@ export async function renderReport(report, mount) {
     });
   });
 
+  const downloadButton = mount.querySelector('#downloadMarkdown');
+  if (downloadButton) {
+    downloadButton.addEventListener('click', () => downloadTextFile(`launchmate-report-${report.id}.md`, markdown));
+  }
+
   const runAiButton = mount.querySelector('#runAi');
   if (runAiButton) {
     runAiButton.addEventListener('click', () => rerunAiAnalysis(report.id, mount));
@@ -173,6 +260,7 @@ async function rerunAiAnalysis(id, mount) {
     const response = await fetch(`/api/audits/${id}/ai`, { method: 'POST' });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'AI analysis failed');
+    saveLocalAudit(payload);
     await renderReport(payload, mount);
   } catch (error) {
     if (button) {

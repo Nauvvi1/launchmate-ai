@@ -1,4 +1,4 @@
-import { renderReport } from './app.js';
+import { loadLocalAudit, renderReport } from './app.js';
 
 const mount = document.querySelector('#publicReport');
 const id = window.location.pathname.split('/').filter(Boolean).pop();
@@ -10,7 +10,13 @@ async function load() {
     if (!response.ok) throw new Error(report.error || 'Report not found');
     await renderReport(report, mount);
   } catch (error) {
-    mount.innerHTML = `<div class="error-box"><strong>Could not load report:</strong><br>${escapeHtml(error.message)}</div>`;
+    const localReport = loadLocalAudit(id);
+    if (localReport) {
+      await renderReport(localReport, mount);
+      return;
+    }
+
+    mount.innerHTML = `<div class="error-box"><strong>Could not load report:</strong><br>${escapeHtml(error.message)}<br><br>This can happen on serverless hosting if temporary storage resets. Run the audit again from the same browser.</div>`;
   }
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "launchmate-ai",
-  "version": "1.1.0",
-  "description": "MVP readiness auditor with deterministic checks and optional OpenAI Advisor.",
+  "version": "1.2.1",
+  "description": "Vercel/pnpm-ready MVP readiness auditor with deterministic checks and optional OpenAI Advisor.",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
@@ -29,5 +29,6 @@
     "morgan": "^1.10.0",
     "nanoid": "^5.0.7"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "packageManager": "pnpm@9.15.4"
 }

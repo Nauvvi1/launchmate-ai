@@ -4,7 +4,7 @@
 
 It checks whether a project is ready to be shown to judges, users or a marketplace reviewer. The app audits a public demo URL, scans landing-page signals, optionally reads a public GitHub README, calculates a **Marketplace Readiness Score**, maps the project to a maturity level and generates a prioritized action plan.
 
-Version 1.1 adds an optional **OpenAI Advisor** layer. The deterministic audit still works as the source of truth. If `OPENAI_API_KEY` is configured, OpenAI reviews the collected audit facts and returns a compact coefficient, verdict, upgrade plan, marketplace pitch and judge-prep questions.
+Version 1.2 is prepared for Vercel deployment and adds an optional **OpenAI Advisor** layer. The deterministic audit still works as the source of truth. If `OPENAI_API_KEY` is configured, OpenAI reviews the collected audit facts and returns a compact coefficient, verdict, upgrade plan, marketplace pitch and judge-prep questions.
 
 ## Why this project exists
 
@@ -47,6 +47,7 @@ LaunchMate AI gives a fast pre-submission audit:
 - Public report page.
 - Markdown report export.
 - Local JSON storage for recent audits.
+- Vercel-ready Express export with serverless-safe temporary storage and browser report fallback.
 
 ## Tech stack
 
@@ -54,14 +55,15 @@ LaunchMate AI gives a fast pre-submission audit:
 - Express
 - Vanilla JavaScript frontend
 - OpenAI Responses API via native `fetch` when configured
-- Local JSON file storage
+- Local JSON file storage locally
+- Temporary `/tmp` storage on Vercel plus browser `localStorage` report fallback
 - No database required for MVP
 
 ## Quick start
 
 ```bash
-npm install
-npm start
+pnpm install
+pnpm start
 ```
 
 Open:
@@ -73,13 +75,13 @@ http://localhost:3000
 Run in development mode:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Run tests:
 
 ```bash
-npm test
+pnpm test
 ```
 
 ## Enable OpenAI Advisor
@@ -113,6 +115,50 @@ The app also includes a sample landing page at:
 ```text
 http://localhost:3000/sample-project.html
 ```
+
+
+## Deploy to Vercel
+
+This version includes `vercel.json` and exports the Express app from `src/server.js`, so Vercel can run it as a serverless Node.js app.
+
+Recommended Vercel settings:
+
+```text
+Framework Preset: Other
+Install Command: pnpm install
+Build Command: leave empty
+Output Directory: leave empty
+```
+
+Add environment variables in Vercel Project Settings:
+
+```env
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini
+AI_ADVISOR_ENABLED=true
+AI_ADVISOR_AUTO=true
+AI_ADVISOR_TIMEOUT_MS=30000
+```
+
+`PUBLIC_BASE_URL` is optional on Vercel. The app uses Vercel deployment environment variables automatically when it builds report links.
+
+After deployment, test:
+
+```text
+https://your-project.vercel.app/health
+```
+
+Then run:
+
+```text
+Fill sample data → Run readiness audit → AI advisor → Public report → Export Markdown
+```
+
+### Storage note for Vercel
+
+Vercel Functions are serverless, so this MVP stores reports in temporary runtime storage on Vercel. The frontend also saves the latest reports in browser `localStorage`, so opening **Public report** from the same browser still works even if the serverless function resets.
+
+For a production version, connect persistent storage such as Vercel KV, Postgres, Supabase or Neon.
 
 ## API
 

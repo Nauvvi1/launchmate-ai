@@ -1,24 +1,35 @@
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = path.resolve(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'audits.json');
+
+function dataDirectory() {
+  if (process.env.LAUNCHMATE_DATA_DIR) return process.env.LAUNCHMATE_DATA_DIR;
+  if (process.env.VERCEL) return path.join(os.tmpdir(), 'launchmate-ai');
+  return path.resolve(__dirname, '..', 'data');
+}
+
+function dbPath() {
+  return path.join(dataDirectory(), 'audits.json');
+}
 
 async function ensureDb() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
+  const dir = dataDirectory();
+  const file = dbPath();
+  await fs.mkdir(dir, { recursive: true });
   try {
-    await fs.access(DB_PATH);
+    await fs.access(file);
   } catch {
-    await fs.writeFile(DB_PATH, JSON.stringify({ audits: [] }, null, 2));
+    await fs.writeFile(file, JSON.stringify({ audits: [] }, null, 2));
   }
 }
 
 export async function listAudits() {
   await ensureDb();
-  const raw = await fs.readFile(DB_PATH, 'utf8');
+  const raw = await fs.readFile(dbPath(), 'utf8');
   const parsed = JSON.parse(raw || '{"audits":[]}');
   return Array.isArray(parsed.audits) ? parsed.audits : [];
 }
@@ -26,8 +37,8 @@ export async function listAudits() {
 export async function saveAudit(audit) {
   await ensureDb();
   const audits = await listAudits();
-  const next = [audit, ...audits].slice(0, 100);
-  await fs.writeFile(DB_PATH, JSON.stringify({ audits: next }, null, 2));
+  const next = [audit, ...audits.filter((item) => item.id !== audit.id)].slice(0, 100);
+  await fs.writeFile(dbPath(), JSON.stringify({ audits: next }, null, 2));
   return audit;
 }
 

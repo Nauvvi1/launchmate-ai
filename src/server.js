@@ -19,10 +19,11 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 const autoRunAiAdvisor = process.env.AI_ADVISOR_AUTO !== 'false';
 
+app.set('trust proxy', true);
 app.use(helmet({
   contentSecurityPolicy: false
 }));
-app.use(morgan('dev'));
+if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(PUBLIC_DIR, {
@@ -30,7 +31,14 @@ app.use(express.static(PUBLIC_DIR, {
 }));
 
 function publicBaseUrl(req) {
-  return process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+
+  const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (vercelHost) return `https://${vercelHost}`;
+
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const protocol = forwardedProto || req.protocol || 'http';
+  return `${protocol}://${req.get('host')}`;
 }
 
 function validateAuditPayload(body) {
@@ -44,7 +52,7 @@ function validateAuditPayload(body) {
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'LaunchMate AI', version: '1.1.0' });
+  res.json({ ok: true, service: 'LaunchMate AI', version: '1.2.0', platform: process.env.VERCEL ? 'vercel' : 'node' });
 });
 
 app.get('/api/audits', async (_req, res, next) => {
@@ -135,6 +143,10 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`LaunchMate AI is running on http://localhost:${port}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`LaunchMate AI is running on http://localhost:${port}`);
+  });
+}
+
+export default app;

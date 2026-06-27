@@ -91,3 +91,18 @@ LaunchMate AI can use a freemium model:
 The project is directly connected to the hackathon theme: it helps other participants turn rough MVPs into polished, launch-ready products. It is not only a demo; it is a tool that improves the quality of demos, marketplace submissions and developer workflows.
 
 The OpenAI layer is not a generic wrapper. It interprets real audit facts and returns a conservative score coefficient plus short, actionable launch advice.
+
+## Deployment readiness
+
+The project is ready to be deployed on Vercel:
+
+- `src/server.js` exports the Express app for Vercel Functions.
+- `vercel.json` routes all requests to the server.
+- Environment variables can be configured in the Vercel dashboard.
+- Audit reports are cached in browser storage for a stable public-report demo on serverless hosting.
+
+Recommended production demo flow:
+
+```text
+Open deployed URL → Fill sample data → Run readiness audit → AI advisor → Public report → Export Markdown
+```
