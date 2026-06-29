@@ -1,5 +1,11 @@
 # Deploy LaunchMate AI to Vercel
 
+
+## Production links
+
+- **Live product:** https://launchmate-ai-omega.vercel.app/
+- **Demo video:** https://www.youtube.com/watch?v=e1Q4eWEnzBQ
+
 ## 1. Push the project to GitHub
 
 Create a new repository and push this folder.
